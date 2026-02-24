@@ -205,10 +205,29 @@ function initChat() {
 
 function appendMessage(role, text) {
     const container = document.getElementById('chatMessages');
-    const div = document.createElement('div');
-    div.classList.add('message', `${role}-message`);
-    div.innerText = text;
-    container.appendChild(div);
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const name = role === 'bot' ? 'Stock Assistant AI' : 'You';
+
+    // Modern avatars matching reference image styles
+    const avatar = role === 'bot'
+        ? '<div class="avatar-small" style="background:#f8dfd4; display:flex; align-items:center; justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e67e22" stroke-width="2"><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 20a10 10 0 0 1 20 0"/></svg></div>'
+        : '<div class="avatar-small" style="background:#d4e6f8; display:flex; align-items:center; justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2980b9" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>';
+
+    const wrapper = document.createElement('div');
+    wrapper.classList.add('message-wrapper', role);
+
+    wrapper.innerHTML = `
+        ${avatar}
+        <div class="message-content-box">
+            <div class="message-metadata">
+                <span class="sender-name">${name}</span>
+                <span class="msg-time">${time}</span>
+            </div>
+            <div class="message-bubble">${text}</div>
+        </div>
+    `;
+
+    container.appendChild(wrapper);
     container.scrollTop = container.scrollHeight;
 }
 
@@ -296,17 +315,19 @@ async function loadStockAnalysis(ticker) {
         const analysisData = await analysisRes.json();
 
         // Clear chat
-        document.getElementById('chatMessages').innerHTML = '<div class="message bot-message">Hello! I\'m your info assistant for ' + ticker + '. Ask me anything!</div>';
+        document.getElementById('chatMessages').innerHTML = '';
+        appendMessage('bot', 'Hello! I\'m your info assistant for ' + ticker + '. Ask me anything!');
 
         renderStockOverview(stockData.info);
         renderIndicators(analysisData.analysis.indicators);
         renderAnalysis(analysisData.analysis);
 
-        // Chart
+        document.getElementById('mainContent').style.display = 'block';
+
+        // Chart - Init after display block to ensure dimensions are correct
         if (!chart) initChart();
         loadHistoryData(ticker, currentRange);
 
-        document.getElementById('mainContent').style.display = 'block';
         showLoading(false);
         document.getElementById('mainContent').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
