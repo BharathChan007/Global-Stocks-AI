@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from data_fetcher import fetch_minute_data, fetch_daily_data, fetch_stock_info, search_tickers
+from data_fetcher import fetch_minute_data, fetch_daily_data, fetch_stock_info, search_tickers, fetch_historical_chart_data
 from analysis import compute_indicators, generate_analysis, OPENROUTER_API_KEY
 import analysis as analysis_module
 
@@ -31,6 +31,11 @@ app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 class ApiKeyRequest(BaseModel):
     api_key: str
+
+
+class ChatRequest(BaseModel):
+    ticker: str
+    message: str
 
 
 @app.get("/")
@@ -110,6 +115,46 @@ async def api_analyze(ticker: str):
         })
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/history/{ticker}")
+async def api_stock_history(ticker: str, range: str = Query("1mo")):
+    """Fetch historical data for charting."""
+    try:
+        df = fetch_historical_chart_data(ticker, range)
+
+        history_data = []
+        if not df.empty:
+            for idx, row in df.iterrows():
+                history_data.append({
+                    "time": int(idx.timestamp()),
+                    "open": round(float(row["Open"]), 2),
+                    "high": round(float(row["High"]), 2),
+                    "low": round(float(row["Low"]), 2),
+                    "close": round(float(row["Close"]), 2),
+                    "volume": int(row["Volume"]),
+                })
+
+        return JSONResponse(content={"history": history_data})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/chat")
+async def api_chat(req: ChatRequest):
+    """Handle stock-specific chatbot queries."""
+    try:
+        # Get context: stock info + some indicators
+        info = fetch_stock_info(req.ticker)
+        daily_df = fetch_daily_data(req.ticker, period="3mo")
+        indicators = compute_indicators(daily_df)
+
+        # Call analysis module specialized chat function
+        response = analysis_module.get_ai_chat_response(req.ticker, req.message, info, indicators)
+
+        return JSONResponse(content={"response": response})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

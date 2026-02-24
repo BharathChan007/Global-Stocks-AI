@@ -12,6 +12,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 
 <body>
@@ -95,57 +96,119 @@
             </div>
         </section>
 
-        <!-- Technical Indicators -->
-        <section class="indicators-section">
-            <h3 class="section-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M3 3v18h18" />
-                    <path d="m18.7 8-5.1 5.2-2.8-2.7L7 14.3" />
-                </svg>
-                Technical Indicators
-            </h3>
-            <div class="indicators-grid" id="indicatorsGrid">
-                <!-- Dynamically filled -->
-            </div>
-        </section>
+        <!-- 3-Column Layout Container -->
+        <div class="layout-grid">
+            <!-- Left Side Indicators -->
+            <aside class="side-indicators" id="leftIndicators">
+                <!-- Filled dynamically -->
+            </aside>
 
-        <!-- AI Analysis -->
-        <section class="analysis-section">
-            <div class="section-title-row">
-                <h3 class="section-title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22" />
-                        <path d="M8 6a4 4 0 0 1 8 0" />
-                        <path d="M5 11a7 7 0 0 0 14 0" />
-                    </svg>
-                    AI Investment Analysis
-                </h3>
-                <span class="ai-badge" id="aiBadge" style="display:none;">🤖 AI-Powered</span>
-            </div>
-            <div class="analysis-columns">
-                <!-- Reasons TO invest -->
-                <div class="analysis-column invest-column">
-                    <div class="column-header bullish">
-                        <span class="column-icon">📈</span>
-                        <h4>10 Reasons to Invest</h4>
+            <!-- Center Content: Chart, Chat, Analysis -->
+            <div class="center-content">
+                <!-- Historical Chart -->
+                <section class="chart-section glass-card">
+                    <div class="chart-header">
+                        <h3 class="section-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M3 3v18h18" />
+                                <path d="m19 9-5 5-4-4-3 3" />
+                            </svg>
+                            Historical Price
+                        </h3>
+                        <div class="chart-filters" id="chartFilters">
+                            <button class="filter-btn" data-range="1d">1D</button>
+                            <button class="filter-btn" data-range="1w">1W</button>
+                            <button class="filter-btn active" data-range="1mo">1M</button>
+                            <button class="filter-btn" data-range="6mo">6M</button>
+                            <button class="filter-btn" data-range="1y">1Y</button>
+                            <button class="filter-btn" data-range="5y">5Y</button>
+                        </div>
                     </div>
-                    <div class="reasons-list" id="reasonsToInvest">
-                        <!-- Dynamically filled -->
-                    </div>
-                </div>
+                    <div id="priceChart" class="chart-container"></div>
+                </section>
 
-                <!-- Reasons NOT to invest -->
-                <div class="analysis-column avoid-column">
-                    <div class="column-header bearish">
-                        <span class="column-icon">📉</span>
-                        <h4>10 Reasons NOT to Invest</h4>
+                <!-- Stock AI Chatbot -->
+                <section class="chat-section glass-card">
+                    <h3 class="section-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                        Stock Assistant AI
+                    </h3>
+                    <div class="chat-interface">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="message bot-message">
+                                Hello! I'm your stock analysis assistant. Ask me anything about this stock's performance
+                                or potential.
+                            </div>
+                        </div>
+                        <div class="chat-suggestions">
+                            <button class="suggestion-btn">What would be the returns if I invest $100 for 10
+                                years?</button>
+                            <button class="suggestion-btn">How many years should I hold this stock for good
+                                returns?</button>
+                            <button class="suggestion-btn">What are the main risks right now?</button>
+                        </div>
+                        <div class="chat-input-wrapper">
+                            <input type="text" id="chatInput" placeholder="Ask a question about this stock...">
+                            <button id="sendChatBtn" class="send-btn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="m22 2-7 20-4-9-9-4Z" />
+                                    <path d="M22 2 11 13" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
-                    <div class="reasons-list" id="reasonsNotToInvest">
-                        <!-- Dynamically filled -->
+                </section>
+
+                <!-- AI Analysis -->
+                <section class="analysis-section">
+                    <div class="section-title-row">
+                        <h3 class="section-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22" />
+                                <path d="M8 6a4 4 0 0 1 8 0" />
+                                <path d="M5 11a7 7 0 0 0 14 0" />
+                            </svg>
+                            AI Investment Analysis
+                        </h3>
+                        <span class="ai-badge" id="aiBadge" style="display:none;">🤖 AI-Powered</span>
                     </div>
-                </div>
+                    <div class="analysis-columns">
+                        <!-- Reasons TO invest -->
+                        <div class="analysis-column invest-column">
+                            <div class="column-header bullish">
+                                <span class="column-icon">📈</span>
+                                <h4>10 Reasons to Invest</h4>
+                            </div>
+                            <div class="reasons-list" id="reasonsToInvest">
+                                <!-- Dynamically filled -->
+                            </div>
+                        </div>
+
+                        <!-- Reasons NOT to invest -->
+                        <div class="analysis-column avoid-column">
+                            <div class="column-header bearish">
+                                <span class="column-icon">📉</span>
+                                <h4>10 Reasons NOT to Invest</h4>
+                            </div>
+                            <div class="reasons-list" id="reasonsNotToInvest">
+                                <!-- Dynamically filled -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </div>
-        </section>
+
+            <!-- Right Side Indicators -->
+            <aside class="side-indicators" id="rightIndicators">
+                <!-- Filled dynamically -->
+            </aside>
+        </div>
 
         <!-- Disclaimer -->
         <div class="disclaimer glass-card">
@@ -189,7 +252,7 @@
         <p>Built with ❤️ using yfinance &amp; AI | Real-time market data from Yahoo Finance</p>
     </footer>
 
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=1.0.2"></script>
 </body>
 
 </html>

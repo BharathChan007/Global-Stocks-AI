@@ -20,6 +20,26 @@ def fetch_daily_data(ticker: str, period: str = "3mo") -> pd.DataFrame:
     return df
 
 
+def fetch_historical_chart_data(ticker: str, time_range: str = "1mo") -> pd.DataFrame:
+    """
+    Fetch historical data for charting based on the requested range.
+    Supported ranges: 1d, 1w, 1mo, 6mo, 1y, 5y
+    """
+    mapping = {
+        "1d": {"period": "1d", "interval": "2m"},
+        "1w": {"period": "5d", "interval": "15m"},
+        "1mo": {"period": "1mo", "interval": "1h"},
+        "6mo": {"period": "6mo", "interval": "1d"},
+        "1y": {"period": "1y", "interval": "1d"},
+        "5y": {"period": "5y", "interval": "1wk"},
+    }
+
+    settings = mapping.get(time_range, mapping["1mo"])
+    stock = yf.Ticker(ticker)
+    df = stock.history(period=settings["period"], interval=settings["interval"])
+    return df
+
+
 def fetch_stock_info(ticker: str) -> dict:
     """Fetch basic stock information (name, sector, market cap, etc.)."""
     stock = yf.Ticker(ticker)

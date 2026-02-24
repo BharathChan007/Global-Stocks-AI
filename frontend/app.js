@@ -6,11 +6,18 @@ const API_BASE = '';
 let currentTicker = null;
 let refreshInterval = null;
 
+// Chart variables
+let chart = null;
+let candleSeries = null;
+let currentRange = '1mo';
+
 // --- Initialize ---
 document.addEventListener('DOMContentLoaded', () => {
     initParticles();
     initSearch();
     initSettings();
+    initChat();
+    initFilters();
 });
 
 // --- Animated Background Particles ---
@@ -68,10 +75,8 @@ function initSettings() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ api_key: key }),
             });
-            const data = await res.json();
-
             if (res.ok) {
-                status.textContent = '✅ API key saved! AI analysis is now enabled.';
+                status.textContent = '✅ API key saved! AI features enabled.';
                 status.className = 'modal-status success';
                 setTimeout(() => { modal.style.display = 'none'; }, 1500);
             } else {
@@ -85,7 +90,129 @@ function initSettings() {
     });
 }
 
-// --- Search with Debounced Autocomplete ---
+// --- Historical Chart ---
+function initChart() {
+    const chartContainer = document.getElementById('priceChart');
+    if (!chartContainer) return;
+
+    // Clear previous chart if any
+    chartContainer.innerHTML = '';
+
+    chart = LightweightCharts.createChart(chartContainer, {
+        layout: {
+            background: { color: 'transparent' },
+            textColor: '#8b949e',
+            fontSize: 12,
+        },
+        grid: {
+            vertLines: { color: 'rgba(255, 255, 255, 0.05)' },
+            horzLines: { color: 'rgba(255, 255, 255, 0.05)' },
+        },
+        rightPriceScale: {
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            autoScale: true,
+        },
+        timeScale: {
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            timeVisible: true,
+            secondsVisible: false,
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
+        },
+    });
+
+    candleSeries = chart.addCandlestickSeries({
+        upColor: '#06d6a0',
+        downColor: '#f85149',
+        borderVisible: false,
+        wickUpColor: '#06d6a0',
+        wickDownColor: '#f85149',
+    });
+
+    window.addEventListener('resize', () => {
+        chart.resize(chartContainer.clientWidth, 400);
+    });
+}
+
+async function loadHistoryData(ticker, range) {
+    try {
+        const res = await fetch(`${API_BASE}/api/history/${ticker}?range=${range}`);
+        const data = await res.json();
+        if (data.history && data.history.length > 0) {
+            candleSeries.setData(data.history);
+            chart.timeScale().fitContent();
+        }
+    } catch (err) {
+        console.error('History fetch error:', err);
+    }
+}
+
+function initFilters() {
+    const filters = document.getElementById('chartFilters');
+    if (!filters) return;
+
+    filters.addEventListener('click', (e) => {
+        if (e.target.classList.contains('filter-btn')) {
+            const range = e.target.getAttribute('data-range');
+            currentRange = range;
+
+            // Update UI
+            filters.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            e.target.classList.add('active');
+
+            if (currentTicker) {
+                loadHistoryData(currentTicker, range);
+            }
+        }
+    });
+}
+
+// --- AI Chatbot ---
+function initChat() {
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendChatBtn');
+    const suggestions = document.querySelectorAll('.suggestion-btn');
+
+    const handleSend = async (message) => {
+        if (!message || !currentTicker) return;
+
+        appendMessage('user', message);
+        chatInput.value = '';
+
+        try {
+            const res = await fetch(`${API_BASE}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticker: currentTicker, message: message }),
+            });
+            const data = await res.json();
+            appendMessage('bot', data.response);
+        } catch (err) {
+            appendMessage('bot', 'Sorry, I encountered an error. Please check your connection or API key.');
+        }
+    };
+
+    sendBtn.addEventListener('click', () => handleSend(chatInput.value.trim()));
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleSend(chatInput.value.trim());
+    });
+
+    suggestions.forEach(btn => {
+        btn.addEventListener('click', () => handleSend(btn.innerText));
+    });
+}
+
+function appendMessage(role, text) {
+    const container = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.classList.add('message', `${role}-message`);
+    div.innerText = text;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+// --- Search ---
 function initSearch() {
     const input = document.getElementById('searchInput');
     const dropdown = document.getElementById('searchDropdown');
@@ -95,13 +222,11 @@ function initSearch() {
     input.addEventListener('input', () => {
         const query = input.value.trim();
         clearTimeout(debounceTimer);
-
         if (query.length < 1) {
             dropdown.classList.remove('active');
             spinner.classList.remove('active');
             return;
         }
-
         spinner.classList.add('active');
         debounceTimer = setTimeout(() => searchTickers(query), 400);
     });
@@ -116,24 +241,18 @@ function initSearch() {
         }
     });
 
-    // Close dropdown on click outside
     document.addEventListener('click', (e) => {
-        if (!e.target.closest('#searchContainer')) {
-            dropdown.classList.remove('active');
-        }
+        if (!e.target.closest('#searchContainer')) dropdown.classList.remove('active');
     });
 }
 
 async function searchTickers(query) {
     const dropdown = document.getElementById('searchDropdown');
     const spinner = document.getElementById('searchSpinner');
-
     try {
         const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-
         spinner.classList.remove('active');
-
         if (data.results && data.results.length > 0) {
             dropdown.innerHTML = data.results.map(item => `
                 <div class="search-item" onclick="selectStock('${item.symbol}')">
@@ -151,7 +270,6 @@ async function searchTickers(query) {
         }
     } catch (err) {
         spinner.classList.remove('active');
-        console.error('Search error:', err);
     }
 }
 
@@ -161,43 +279,42 @@ function selectStock(ticker) {
     loadStockAnalysis(ticker);
 }
 
-// --- Load Full Stock Analysis ---
+// --- Load Analysis ---
 async function loadStockAnalysis(ticker) {
     currentTicker = ticker;
     showLoading(true);
 
     try {
-        // Fetch stock data and analysis in parallel
         const [stockRes, analysisRes] = await Promise.all([
             fetch(`${API_BASE}/api/stock/${ticker}`),
             fetch(`${API_BASE}/api/analyze/${ticker}`)
         ]);
 
-        if (!stockRes.ok || !analysisRes.ok) {
-            throw new Error('Failed to fetch data. Please check the ticker symbol.');
-        }
+        if (!stockRes.ok || !analysisRes.ok) throw new Error('Data unavailable for this ticker.');
 
         const stockData = await stockRes.json();
         const analysisData = await analysisRes.json();
+
+        // Clear chat
+        document.getElementById('chatMessages').innerHTML = '<div class="message bot-message">Hello! I\'m your info assistant for ' + ticker + '. Ask me anything!</div>';
 
         renderStockOverview(stockData.info);
         renderIndicators(analysisData.analysis.indicators);
         renderAnalysis(analysisData.analysis);
 
+        // Chart
+        if (!chart) initChart();
+        loadHistoryData(ticker, currentRange);
+
         document.getElementById('mainContent').style.display = 'block';
         showLoading(false);
-
-        // Scroll to results
         document.getElementById('mainContent').scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-        // Set up auto-refresh every 60 seconds
         if (refreshInterval) clearInterval(refreshInterval);
         refreshInterval = setInterval(() => refreshMinuteData(ticker), 60000);
-
     } catch (err) {
         showLoading(false);
         alert('Error: ' + err.message);
-        console.error(err);
     }
 }
 
@@ -208,31 +325,25 @@ async function refreshMinuteData(ticker) {
             const data = await res.json();
             renderStockOverview(data.info);
         }
-    } catch (err) {
-        console.error('Refresh error:', err);
-    }
+    } catch (err) { }
 }
 
-// --- Render Stock Overview ---
+// --- Renderers ---
 function renderStockOverview(info) {
     document.getElementById('stockName').textContent = info.longName || info.shortName || info.symbol;
     document.getElementById('stockTicker').textContent = info.symbol;
     document.getElementById('stockExchange').textContent = info.sector || '';
-
     const price = info.currentPrice || 0;
     const prevClose = info.previousClose || 0;
     const change = price - prevClose;
     const changePct = prevClose ? ((change / prevClose) * 100) : 0;
-
     const currency = info.currency || 'USD';
     document.getElementById('currentPrice').textContent = `${formatCurrency(price, currency)}`;
-
     const changeEl = document.getElementById('priceChange');
     const sign = change >= 0 ? '+' : '';
     changeEl.textContent = `${sign}${change.toFixed(2)} (${sign}${changePct.toFixed(2)}%)`;
     changeEl.className = `price-change ${change >= 0 ? 'positive' : 'negative'}`;
 
-    // Overview grid stats
     const stats = [
         { label: 'Open', value: formatNum(info.open) },
         { label: 'Day Low', value: formatNum(info.dayLow) },
@@ -247,148 +358,57 @@ function renderStockOverview(info) {
         { label: 'Div Yield', value: info.dividendYield ? (info.dividendYield * 100).toFixed(2) + '%' : 'N/A' },
         { label: '50D Avg', value: formatNum(info.fiftyDayAverage) },
     ];
-
-    document.getElementById('overviewGrid').innerHTML = stats.map(s => `
-        <div class="overview-stat">
-            <div class="label">${s.label}</div>
-            <div class="value">${s.value}</div>
-        </div>
-    `).join('');
+    document.getElementById('overviewGrid').innerHTML = stats.map(s => `<div class="overview-stat"><div class="label">${s.label}</div><div class="value">${s.value}</div></div>`).join('');
 }
 
-// --- Render Technical Indicators ---
 function renderIndicators(indicators) {
     if (!indicators) return;
-
     const cards = [
         { label: 'RSI (14)', value: indicators.rsi, signal: rsiSignal(indicators.rsi) },
         { label: 'MACD', value: indicators.macd, signal: macdSignal(indicators.macd, indicators.macd_signal) },
-        { label: 'MACD Signal', value: indicators.macd_signal, signal: null },
-        { label: 'MACD Histogram', value: indicators.macd_histogram, signal: indicators.macd_histogram > 0 ? 'bullish' : 'bearish' },
+        { label: 'MACD Hist', value: indicators.macd_histogram, signal: indicators.macd_histogram > 0 ? 'bullish' : 'bearish' },
         { label: 'SMA 20', value: indicators.sma_20, signal: priceVsSma(indicators.current_price, indicators.sma_20) },
         { label: 'SMA 50', value: indicators.sma_50, signal: priceVsSma(indicators.current_price, indicators.sma_50) },
         { label: 'EMA 12', value: indicators.ema_12, signal: null },
         { label: 'EMA 26', value: indicators.ema_26, signal: null },
-        { label: 'Bollinger Upper', value: indicators.bb_upper, signal: null },
-        { label: 'Bollinger Lower', value: indicators.bb_lower, signal: null },
         { label: 'ADX', value: indicators.adx, signal: adxSignal(indicators.adx) },
         { label: 'ATR', value: indicators.atr, signal: null },
-        { label: 'Stochastic %K', value: indicators.stoch_k, signal: stochSignal(indicators.stoch_k) },
-        { label: 'Stochastic %D', value: indicators.stoch_d, signal: null },
-        { label: '5-Day Return', value: indicators.return_5d != null ? indicators.return_5d + '%' : 'N/A', signal: indicators.return_5d > 0 ? 'bullish' : indicators.return_5d < 0 ? 'bearish' : 'neutral', raw: true },
-        { label: '20-Day Return', value: indicators.return_20d != null ? indicators.return_20d + '%' : 'N/A', signal: indicators.return_20d > 0 ? 'bullish' : indicators.return_20d < 0 ? 'bearish' : 'neutral', raw: true },
+        { label: 'Stoch %K', value: indicators.stoch_k, signal: stochSignal(indicators.stoch_k) },
+        { label: 'BB Width', value: indicators.bb_width, signal: null },
+        { label: '5D Return', value: indicators.return_5d + '%', signal: indicators.return_5d > 0 ? 'bullish' : 'bearish', raw: true },
+        { label: '20D Return', value: indicators.return_20d + '%', signal: indicators.return_20d > 0 ? 'bullish' : 'bearish', raw: true },
+        { label: 'Pct High', value: indicators.pct_from_high + '%', signal: null, raw: true },
     ];
 
-    document.getElementById('indicatorsGrid').innerHTML = cards.map(c => {
-        const displayVal = c.raw ? c.value : (c.value != null && c.value !== 'N/A' ? parseFloat(c.value).toFixed(2) : 'N/A');
-        const signalHtml = c.signal ? `<span class="ind-signal ${c.signal}">${c.signal}</span>` : '';
-        return `
-            <div class="indicator-card">
-                <div class="ind-label">${c.label}</div>
-                <div class="ind-value">${displayVal}</div>
-                ${signalHtml}
-            </div>
-        `;
-    }).join('');
+    const generateHtml = (c) => {
+        const val = c.raw ? c.value : (c.value != null ? parseFloat(c.value).toFixed(2) : 'N/A');
+        const sig = c.signal ? `<span class="ind-signal ${c.signal}">${c.signal}</span>` : '';
+        return `<div class="indicator-card"><div class="ind-label">${c.label}</div><div class="ind-value">${val}</div>${sig}</div>`;
+    };
+
+    // Split indicators 50/50
+    const half = Math.ceil(cards.length / 2);
+    document.getElementById('leftIndicators').innerHTML = cards.slice(0, half).map(generateHtml).join('');
+    document.getElementById('rightIndicators').innerHTML = cards.slice(half).map(generateHtml).join('');
 }
 
-function rsiSignal(rsi) {
-    if (rsi == null || rsi === 'N/A') return 'neutral';
-    rsi = parseFloat(rsi);
-    if (rsi < 30) return 'bullish';
-    if (rsi > 70) return 'bearish';
-    return 'neutral';
-}
+function rsiSignal(r) { r = parseFloat(r); if (r < 30) return 'bullish'; if (r > 70) return 'bearish'; return 'neutral'; }
+function macdSignal(m, s) { return parseFloat(m) > parseFloat(s) ? 'bullish' : 'bearish'; }
+function priceVsSma(p, s) { return parseFloat(p) > parseFloat(s) ? 'bullish' : 'bearish'; }
+function adxSignal(a) { return parseFloat(a) > 25 ? 'bullish' : 'neutral'; }
+function stochSignal(k) { k = parseFloat(k); if (k < 20) return 'bullish'; if (k > 80) return 'bearish'; return 'neutral'; }
 
-function macdSignal(macd, signal) {
-    if (macd == null || signal == null) return 'neutral';
-    return parseFloat(macd) > parseFloat(signal) ? 'bullish' : 'bearish';
-}
-
-function priceVsSma(price, sma) {
-    if (price == null || sma == null) return 'neutral';
-    return parseFloat(price) > parseFloat(sma) ? 'bullish' : 'bearish';
-}
-
-function adxSignal(adx) {
-    if (adx == null) return 'neutral';
-    return parseFloat(adx) > 25 ? 'bullish' : 'neutral';
-}
-
-function stochSignal(k) {
-    if (k == null) return 'neutral';
-    k = parseFloat(k);
-    if (k < 20) return 'bullish';
-    if (k > 80) return 'bearish';
-    return 'neutral';
-}
-
-// --- Render AI Analysis ---
 function renderAnalysis(analysis) {
-    const prosContainer = document.getElementById('reasonsToInvest');
-    const consContainer = document.getElementById('reasonsNotToInvest');
-
-    // Show/hide AI badge
-    const aiBadge = document.getElementById('aiBadge');
-    if (analysis.ai_powered) {
-        aiBadge.style.display = 'inline-block';
-    } else {
-        aiBadge.style.display = 'none';
-    }
-
-    prosContainer.innerHTML = analysis.reasons_to_invest.map((r, i) => `
-        <div class="reason-card">
-            <div class="reason-header">
-                <span class="reason-number">${i + 1}</span>
-                <span class="reason-title">${r.title}</span>
-            </div>
-            <p class="reason-detail">${r.detail}</p>
-        </div>
-    `).join('');
-
-    consContainer.innerHTML = analysis.reasons_not_to_invest.map((r, i) => `
-        <div class="reason-card">
-            <div class="reason-header">
-                <span class="reason-number">${i + 1}</span>
-                <span class="reason-title">${r.title}</span>
-            </div>
-            <p class="reason-detail">${r.detail}</p>
-        </div>
-    `).join('');
+    const pros = document.getElementById('reasonsToInvest');
+    const cons = document.getElementById('reasonsNotToInvest');
+    document.getElementById('aiBadge').style.display = analysis.ai_powered ? 'inline-block' : 'none';
+    const mapFn = (r, i) => `<div class="reason-card"><div class="reason-header"><span class="reason-number">${i + 1}</span><span class="reason-title">${r.title}</span></div><p class="reason-detail">${r.detail}</p></div>`;
+    pros.innerHTML = analysis.reasons_to_invest.map(mapFn).join('');
+    cons.innerHTML = analysis.reasons_not_to_invest.map(mapFn).join('');
 }
 
-// --- Loading Overlay ---
-function showLoading(show) {
-    document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
-}
-
-// --- Formatting Helpers ---
-function formatNum(n) {
-    if (!n && n !== 0) return 'N/A';
-    return parseFloat(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function formatCurrency(n, currency) {
-    if (!n && n !== 0) return 'N/A';
-    try {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(n);
-    } catch {
-        return '$' + parseFloat(n).toFixed(2);
-    }
-}
-
-function formatLargeNum(n) {
-    if (!n) return 'N/A';
-    if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
-    if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
-    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-    return n.toLocaleString();
-}
-
-function formatMarketCap(n) {
-    if (!n) return 'N/A';
-    if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
-    if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
-    if (n >= 1e6) return '$' + (n / 1e6).toFixed(0) + 'M';
-    return '$' + n.toLocaleString();
-}
+function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
+function formatNum(n) { return n != null ? parseFloat(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 'N/A'; }
+function formatCurrency(n, c) { try { return new Intl.NumberFormat('en-US', { style: 'currency', currency: c }).format(n); } catch { return '$' + parseFloat(n).toFixed(2); } }
+function formatLargeNum(n) { if (!n) return 'N/A'; if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B'; if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M'; return n.toLocaleString(); }
+function formatMarketCap(n) { if (!n) return 'N/A'; if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T'; if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B'; return '$' + n.toLocaleString(); }

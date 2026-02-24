@@ -472,3 +472,61 @@ def _pad_reasons(pros: list, cons: list, indicators: dict, info: dict):
             break
         if g["title"] not in existing_con_titles:
             cons.append(g)
+
+
+def get_ai_chat_response(ticker: str, message: str, stock_info: dict, indicators: dict) -> str:
+    """Handle general stock questions using the AI model with stock context."""
+    if not OPENROUTER_API_KEY:
+        return "Chatbot functionality requires an OpenRouter API key. Please set one in the settings gear icon above."
+
+    name = stock_info.get("shortName", ticker)
+
+    # Build a concise context for the chat
+    ind_str = ", ".join([f"{k}: {_safe(v, 2)}" for k, v in indicators.items() if v is not None])
+
+    prompt = f"""You are a helpful and expert stock analysis chatbot.
+Context of the stock being discussed:
+- Name: {name} ({ticker})
+- Sector: {stock_info.get('sector', 'N/A')}
+- Current Price: ${indicators.get('current_price', 'N/A')}
+- Important Metrics: {ind_str}
+
+User Question: {message}
+
+Instructions:
+- Provide a helpful, professional, and clear answer.
+- Base your logic on the provided stock data if relevant.
+- For investment return calculations, use reasonable assumptions (e.g., historical market averages if data is missing) but add a disclaimer.
+- Be honest about limitations (e.g., you cannot predict exact future prices).
+- Address the user directly.
+- Keep the response concise (max 3-4 paragraphs) but informative.
+"""
+
+    try:
+        response = requests.post(
+            url=OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": MODEL,
+                "messages": [
+                    {"role": "system", "content": "You are a helpful stock market expert. Provide concise, clear, and professional advice based on provided data."},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.7,
+                "max_tokens": 1000,
+            },
+            timeout=60,
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("choices", [{}])[0].get("message", {}).get("content", "I'm sorry, I couldn't generate a response right now.")
+        else:
+            return f"Error from AI service (Status {response.status_code}). Please verify your API key and try again."
+
+    except Exception as e:
+        print(f"[AI Chat] Error: {e}")
+        return "I encountered an error while processing your request. Please try again later."
